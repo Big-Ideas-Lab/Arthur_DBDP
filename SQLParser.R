@@ -82,10 +82,48 @@ getNightData(dummy_wearable,'Date')
 dummy_wearable <- weareable_data[c(1:3000),]
 dummy_wearable
 
-makeInt(table, )
-stepQuantiles <-quantile(dummy_wearable$Steps, na.rm = TRUE, probs = seq(0.1, 0.9, by = 0.1))
+############
+# a function that takes in a table and a list of column names and change them into numerical types
 
+makeNum<- function(table, columns){
+  table[,columns] <- suppressWarnings(sapply(table[,columns],as.numeric))
+  return (table)
+}
 
+dummy_wearable = makeNum(dummy_wearable, c('Steps'))
+sapply(dummy_wearable, class)
+
+############
+
+############
+# a function that categorizes a feature to the corresponding quantile
+# assumption here is that if there's at most one value that crosses multiple quantiles
+getQuantile<- function(table, column, newColName, rangeStart, rangeEnd, rangeStep){
+
+  quantiles <-quantile(dummy_wearable[,column], na.rm = TRUE, probs = seq(rangeStart, rangeEnd, by = rangeStep))
+  
+  checkPt <- which(table(quantiles) > 1)
+  len = length(quantiles)
+  for (i in (2:len)){
+    if(quantiles[i]== quantiles[check])
+    {
+      quantiles[i] = quantiles[check]+runif(1, quantiles[i-1], quantiles[len]/(len*len))
+    }
+  }
+  table[, newColName] <- findInterval(table[,column], quantiles)
+  return (table)
+
+}
+
+getQuantile(dummy_wearable, 'Steps', 'StDecID',.1,1.0,.1)
+dummy_wearable = makeNum(dummy_wearable, c('Skin_Temperature_F'))
+getQuantile(dummy_wearable, 'Skin_Temperature_F', 'SkinTempID',.1,1.0,.1)
+
+dummy_wearable = makeNum(dummy_wearable, c('GSR'))
+getQuantile(dummy_wearable, 'GSR', 'GSRID',.1,1.0,.1)
+######################
+
+######################
 
 
 
