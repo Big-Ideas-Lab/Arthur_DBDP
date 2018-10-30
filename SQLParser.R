@@ -24,32 +24,30 @@ getTable <- function(string){
   table<- dbGetQuery(db, paste('select * from ', string))
   return(table)
 }
-#########
 
+#########
 #pulled up here for function construction. To be deleted
 weareable_data = getTable("wearable_data")
 demographics = getTable("demographics")
 lab_results = getTable("lab_results")
 vitals = getTable("vitals")
 ##########
-
-
 #Table Cleaner ## optional
 cleanTable<-function(table, remm, colName){
   table2<<-table[!(table[,colName] %in% remm),]
   return(table2)
 }
-######
+######################
 
+######################
 #change time format
 formatTime<-function(table, format_DIY, colName){
   table$Date <- as.POSIXlt(table[,colName],format= format_DIY)
   return (table)
 }
 ############
-
 #created a dummy_wearable for testing. to be deleted
-dummy_wearable <- weareable_data[c(1:100),]
+dummy_wearable <- weareable_data[c(1:3000),]
 dummy_wearable
 
 dummy_wearable<-formatTime(dummy_wearable,"%Y-%m-%d %H:%M:%S", "Timestamp_Local")
@@ -63,7 +61,6 @@ getColumnInfo<- function(table, colName){
 getColumnInfo(dummy_wearable, 'GSR')
 
 ##########
-
 # get day data or get night data
 getDayData <- function(table, dateCol){
   dayTable = table[table[,dateCol]$hour >= 8 & table[,dateCol]$hour <20,]
@@ -78,10 +75,6 @@ getNightData <- function(table, dateCol){
 getNightData(dummy_wearable,'Date')
 ##############
 
-
-dummy_wearable <- weareable_data[c(1:3000),]
-dummy_wearable
-
 ############
 # a function that takes in a table and a list of column names and change them into numerical types
 
@@ -92,8 +85,8 @@ makeNum<- function(table, columns){
 
 dummy_wearable = makeNum(dummy_wearable, c('Steps'))
 sapply(dummy_wearable, class)
-
 ############
+
 
 ############
 # a function that categorizes a feature to the corresponding quantile
@@ -115,15 +108,61 @@ getQuantile<- function(table, column, newColName, rangeStart, rangeEnd, rangeSte
 
 }
 
-getQuantile(dummy_wearable, 'Steps', 'StDecID',.1,1.0,.1)
+getColumnInfo(getQuantile(dummy_wearable, 'Steps', 'StDecID',.1,1.0,.1),'StDecID')
 dummy_wearable = makeNum(dummy_wearable, c('Skin_Temperature_F'))
 getQuantile(dummy_wearable, 'Skin_Temperature_F', 'SkinTempID',.1,1.0,.1)
 
-dummy_wearable = makeNum(dummy_wearable, c('GSR'))
-getQuantile(dummy_wearable, 'GSR', 'GSRID',.1,1.0,.1)
-######################
 
 ######################
 
+######################
+#create a new list which reflect the sum of the items in a specific window
+window <- function(table, column, groupKey, winSize, func, newColName){
+  table[,newColName] = ave(table[,column], table[,groupKey], FUN = function(x) rollapply(x, width =winSize, FUN= func, align ="right", partial = TRUE))
+  return (table)
+}
+dummy_wearable <- window(dummy_wearable, 'Steps', 1, 10, sum, '10minSum')
+######################
 
+######################
+#get resting information based on $keyColumn
+restInfo<- function(table, column, keyCol, threshold =10, newName= 'restInfo')
+{
+  table[,keyCol][is.na(table[,keyCol])] <- 0
+  table[,newName] = table[,column][which(table[keyCol] < threshold & !is.na(table[keyCol]))]
+  return(table)
+}
+######################
 
+######################
+#based on the previous function, we now develop a get resting data function, which will append the resting data to the original table
+getRestData <- function(table, column, newColumnName, winSize = 10, threshold, keyColumn){
+  table<- window(table, keyColumn, 1, winSize, sum, "keyWindowValue")
+  table<-restInfo(table, column, "keyWindowValue", threshold, newName = newColumnName)
+  return (table)
+}
+getRestData(dummy_wearable, "Heart_Rate", "RestingHR", 10, 10, "Steps")
+######################
+
+######################
+#get a subtable of high activity level according to self-defined standard
+highActivityTable<- function(table, standardColumn){
+  table = makeNum(table, c(standardColumn))
+  table = getQuantile(table, standardColumn, "StandardColumnID",.1,1.0,.1)
+  table <- table[table$StandardColumnID >= 9 & !is.na(table$StandardColumnID),]
+  return (table)
+}
+
+highActivityTable(dummy_wearable, "Steps")
+######################
+
+######################
+#get a subtable of high activity level according to self-defined standard
+lowActivityTable<- function(table, standardColumn){
+  table = makeNum(table, c(standardColumn))
+  table = getQuantile(table, standardColumn, "StandardColumnID",.1,1.0,.1)
+  table <- table[table$StandardColumnID <= 1 & !is.na(table$StandardColumnID),]
+  return (table)
+}
+
+getNightData(lowActivityTable(dummy_wearable, "Steps"),'Date')
